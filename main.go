@@ -1,6 +1,9 @@
 package main
 
 import (
+	"bufio"
+	"bytes"
+	"encoding/binary"
 	"encoding/json"
 	"gopkg.in/yaml.v3"
 	"io"
@@ -8,6 +11,7 @@ import (
 	"os"
 	"strings"
 	"time"
+	"unicode/utf16"
 )
 
 func main() {
@@ -20,23 +24,32 @@ func main() {
 func replaceAndWrite(config Config) {
 	jsonMap := readJson(config.JsonPath)
 	txt := readTxt(config.TxtPath)
-	log.Println("成功读取所有文件, 开始替换文本...")
+	log.Println("成功读取所有文件, 开始替换...")
+	changeByteCount := 0
+	beforeByteCount := len(txt)
 	for old, _new := range jsonMap {
-		txt = strings.Replace(txt, old, _new, -1)
+		changeByteCount += len(_new) - len(old)
+		txt = strings.Replace(txt, old+"\r\n", _new+"\r\n", 1)
+		//log.Println(old, "->", _new)
 	}
-	log.Println("成功替换所有文本, 开始写入文本到", config.NewTxtPath)
+	log.Println("成功替换所有文本", "预期字节数变化", changeByteCount,
+		"实际字节数变化", len(txt)-beforeByteCount, ",开始写入文本到", config.NewTxtPath)
 	//将替换后的文本写入到新文件中
 	newFile, err := os.Create(config.NewTxtPath)
 	if err != nil {
 		log.Fatalf(red("创建文件失败, 错误信息: %v"), err)
 	}
 	defer newFile.Close()
-	//写入内容
-	_, err = newFile.WriteString(txt)
+
+	//以utf16写入
+	utf16txt := utf16.Encode([]rune(txt))
+	writer := bufio.NewWriter(newFile)
+	err = binary.Write(writer, binary.LittleEndian, &utf16txt)
+	//_, err = newFile.WriteString(txt)
 	if err != nil {
 		log.Fatalf(red("写入文件失败, 错误信息: %v"), err)
 	}
-	log.Println("成功写入")
+	log.Println("成功写入!!!")
 }
 
 type Config struct {
@@ -72,13 +85,13 @@ func readJson(jsonPath string) map[string]string {
 		log.Fatalf(red("文件 %v 打开失败, 错误信息: %v"), jsonPath, err)
 	}
 	defer jsonFile.Close()
-	bytes, _ := io.ReadAll(jsonFile)
+	byteSlice, _ := io.ReadAll(jsonFile)
 	jsonMap := make(map[string]string, 400000)
-	err = json.Unmarshal(bytes, &jsonMap)
+	err = json.Unmarshal(byteSlice, &jsonMap)
 	if err != nil {
 		log.Fatalf(red("文件 %v 反序列化错误, 可能是格式问题, 错误信息: %v"), jsonPath, err)
 	}
-	log.Println("成功读取文件", jsonPath, "并反序列化成功, 有效键值对数:", len(jsonMap))
+	log.Println("成功读取文件", jsonPath, "有效键值对数:", len(jsonMap))
 	return jsonMap
 }
 
@@ -94,10 +107,14 @@ func readTxt(txtPath string) string {
 	if err != nil {
 		log.Fatalf(red("读取txt文件失败, 错误信息: %v"), err)
 	}
-	res := string(content)
-	log.Println("成功读取文件", txtPath, "有效字节数(英文2字节, 汉字3字节):", len(res))
-	//将文件内容转换为字符串
-	return res
+	log.Println("成功读取文件", txtPath, "有效字节数(英文数字1字节, 汉字3字节):", len(content))
+	//将文件内容转换为字符串//utf16 -> utf8
+	utf16Str := make([]uint16, len(content)/2)
+	err = binary.Read(bytes.NewReader(content), binary.LittleEndian, &utf16Str)
+	if err != nil {
+		log.Fatalln(err)
+	}
+	return string(utf16.Decode(utf16Str))
 }
 
 func red(formatStr string) string {

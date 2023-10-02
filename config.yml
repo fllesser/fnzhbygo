@@ -1,3 +1,7 @@
+# 所有文件必须和可执行文件同目录
+# json文件名称, 例如 Game.json
+json-path: newGame.json
+# 英文文件名称, 例如 Game.Locres.txt
 txt-path: Game.Locres.txt
-json-path: oldnew.json
-new-txt-path: Game.Locres.txt
+# 汉化后的文件名称, 可以和英文文件名称相同, 不相同则创建新的文件
+new-txt-path: newGame.Locres.txt
