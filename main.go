@@ -9,33 +9,40 @@ import (
 	"io"
 	"log"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 	"unicode/utf16"
 )
 
 func main() {
-	start := time.Now()
 	replaceAndWrite(readConfig())
-	cost := time.Since(start)
-	log.Println("本次运行耗时:", cost)
 }
+
+var ex, _ = os.Executable()
+var currPath = filepath.Dir(ex) + "/"
 
 func replaceAndWrite(config Config) {
 	jsonMap := readJson(config.JsonPath)
 	txt := readTxt(config.TxtPath)
-	log.Println("成功读取所有文件, 开始替换...")
+	log.Println("成功读取所有文件, 按下回车键, 开始替换")
+	_, err := bufio.NewReader(os.Stdin).ReadString('\n')
+	if err != nil {
+		log.Fatalln(err)
+	}
+	start := time.Now()
 	changeByteCount := 0
 	beforeByteCount := len(txt)
-	for old, _new := range jsonMap {
-		changeByteCount += len(_new) - len(old)
-		txt = strings.Replace(txt, old+"\r\n", _new+"\r\n", 1)
-		//log.Println(old, "->", _new)
+	txt = strings.Replace(txt, "All", "所有", 1)
+	for en, zh := range jsonMap {
+		changeByteCount += len(zh) - len(en)
+		txt = strings.Replace(txt, "\r\n"+en+"\r\n", "\r\n"+zh+"\r\n", 1)
+		log.Println(en, "->", zh)
 	}
-	log.Println("成功替换所有文本", "预期字节数变化", changeByteCount,
-		"实际字节数变化", len(txt)-beforeByteCount, ",开始写入文本到", config.NewTxtPath)
+	log.Printf("成功替换所有文本, 期望字节数变化:%d, 实际字节数变化:%d, 开始写入文本到 %v",
+		changeByteCount, len(txt)-beforeByteCount, config.NewTxtPath)
 	//将替换后的文本写入到新文件中
-	newFile, err := os.Create(config.NewTxtPath)
+	newFile, err := os.Create(currPath + config.NewTxtPath)
 	if err != nil {
 		log.Fatalf(red("创建文件失败, 错误信息: %v"), err)
 	}
@@ -45,11 +52,11 @@ func replaceAndWrite(config Config) {
 	utf16txt := utf16.Encode([]rune(txt))
 	writer := bufio.NewWriter(newFile)
 	err = binary.Write(writer, binary.LittleEndian, &utf16txt)
-	//_, err = newFile.WriteString(txt)
 	if err != nil {
 		log.Fatalf(red("写入文件失败, 错误信息: %v"), err)
 	}
-	log.Println("成功写入!!!")
+	cost := time.Since(start)
+	log.Println("写入完毕!!! 本次运行耗时:", cost)
 }
 
 type Config struct {
@@ -59,7 +66,7 @@ type Config struct {
 }
 
 func readConfig() Config {
-	file, err := os.Open("config.yml")
+	file, err := os.Open(currPath + "config.yml")
 	if err != nil {
 		log.Fatalf(red("打开 config.yml 失败, 错误信息: %v"), err)
 	}
@@ -80,7 +87,7 @@ func readConfig() Config {
 }
 
 func readJson(jsonPath string) map[string]string {
-	jsonFile, err := os.Open(jsonPath)
+	jsonFile, err := os.Open(currPath + jsonPath)
 	if err != nil {
 		log.Fatalf(red("文件 %v 打开失败, 错误信息: %v"), jsonPath, err)
 	}
@@ -97,7 +104,7 @@ func readJson(jsonPath string) map[string]string {
 
 func readTxt(txtPath string) string {
 	//打开要替换的txt文件
-	file, err := os.Open(txtPath)
+	file, err := os.Open(currPath + txtPath)
 	if err != nil {
 		log.Fatalf(red("打开txt文件失败, 错误信息: %v"), err)
 	}
