@@ -9,15 +9,15 @@ import (
 	"gopkg.in/yaml.v3"
 	"io"
 	"os"
-	"path/filepath"
 	"strings"
 	"time"
 	"unicode/utf16"
 )
 
 var (
-	ex, _    = os.Executable()
-	currPath = filepath.Dir(ex) + "/docu/"
+	// ex, _    = os.Executable()
+	// currPath = filepath.Dir(ex) + "/docu/"
+	currPath = "docu/"
 )
 
 func RepAndWrite() {
